@@ -1,6 +1,33 @@
 use either::Either;
 use regex::Regex;
 use lazy_static::lazy_static;
+use std::collections::HashMap;
+
+#[derive(Debug, PartialEq)]
+pub struct Block<'a> {
+    user_defs: HashMap<&'a str, Block<'a>>,
+    operations: Vec<RefinedToken<'a>>
+}
+
+#[derive(Debug, PartialEq)]
+enum RefinedToken<'a> {
+    LangType(PrimitiveType),
+    LangTypeCast(PrimitiveType),
+    Number(Either<isize, f64>),
+    Keyword(RefinedStandardKeyword),
+    Call(&'a str),
+}
+
+#[derive(Debug, Eq, PartialEq)]
+enum RefinedStandardKeyword {
+    Stdin,
+    Stdout,
+    Add,
+    Mul,
+    Sub,
+    Div,
+    Copy,
+}
 
 #[derive(Debug, PartialEq)]
 pub enum RawToken<'a> {
@@ -9,7 +36,7 @@ pub enum RawToken<'a> {
     LangType(PrimitiveType),
     LangTypeCast(PrimitiveType),
     Number(Either<isize, f64>),
-    Keyword(StandardKeyword),
+    Keyword(RawStandardKeyword),
     UserDefinedToken(&'a str),
 }
 
@@ -20,7 +47,7 @@ pub enum PrimitiveType {
 }
 
 #[derive(Debug, Eq, PartialEq)]
-pub enum StandardKeyword {
+pub enum RawStandardKeyword {
     Fndef,
     Stdin,
     Stdout,
@@ -29,6 +56,65 @@ pub enum StandardKeyword {
     Sub,
     Div,
     Copy,
+}
+
+impl Block<'_> {
+    pub fn from_rawtoken_iter<'a>(iter: &mut std::vec::IntoIter<RawToken<'a>>) -> Block<'a> {
+        let mut new_user_defs = HashMap::new();
+        let mut new_operations = Vec::new();
+
+        let mut token_stack = Vec::<(&str, usize)>::new();
+        let mut block_stack = Vec::<Block>::new();
+
+        use RawToken::*;
+        while let Some(next) = iter.next() { match next {
+            StartBlock => block_stack.push(Block::from_rawtoken_iter(iter)),
+            EndBlock => break,
+            LangType(t) => new_operations.push(RefinedToken::LangType(t)),
+            LangTypeCast(t) => new_operations.push(RefinedToken::LangTypeCast(t)),
+            Number(n) => new_operations.push(RefinedToken::Number(n)),
+            Keyword(w) => match w {
+                RawStandardKeyword::Fndef => {
+                    let (new_fn_name, definition_index) =
+                        token_stack.pop().expect("Function defined without name");
+                    match new_user_defs.insert(
+                        new_fn_name,
+                        block_stack.pop().expect("Function defined without body"),
+                    ) { None => (), Some(_) => eprintln!("WARN: Function defined twice. Overwriting."),}
+                    new_operations.remove(definition_index);
+                },
+                r => new_operations.push(
+                    RefinedToken::Keyword(
+                        RefinedStandardKeyword::from_raw(r)
+                            .expect("raw standard keyword not properly filtered")
+                    )
+                ),
+            },
+            UserDefinedToken(t) => {
+                token_stack.push((t, new_operations.len()));
+                new_operations.push(RefinedToken::Call(t))
+            },
+        }}
+        Block {
+            user_defs: new_user_defs,
+            operations: new_operations,
+        }
+    }
+}
+
+impl RefinedStandardKeyword {
+    pub fn from_raw(kw: RawStandardKeyword) -> Result<RefinedStandardKeyword, ()> {
+        match kw {
+            RawStandardKeyword::Stdin => Ok(RefinedStandardKeyword::Stdin),
+            RawStandardKeyword::Stdout => Ok(RefinedStandardKeyword::Stdout),
+            RawStandardKeyword::Add => Ok(RefinedStandardKeyword::Add),
+            RawStandardKeyword::Mul => Ok(RefinedStandardKeyword::Mul),
+            RawStandardKeyword::Sub => Ok(RefinedStandardKeyword::Sub),
+            RawStandardKeyword::Div => Ok(RefinedStandardKeyword::Div),
+            RawStandardKeyword::Copy => Ok(RefinedStandardKeyword::Copy),
+            _ => Err(()),
+        }
+    }
 }
 
 impl RawToken<'_> {
@@ -64,7 +150,7 @@ impl RawToken<'_> {
                 return RawToken::Number(Either::Left(match_string.parse::<isize>().expect("regex matched unparseable int")));
             }
         }
-        if let Some(keyword) = StandardKeyword::from_str(match_string) {
+        if let Some(keyword) = RawStandardKeyword::from_str(match_string) {
             return RawToken::Keyword(keyword);
         }
 
@@ -76,6 +162,7 @@ impl RawToken<'_> {
     }
 }
 
+
 impl PrimitiveType {
     fn from_str(string: &str) -> Option<PrimitiveType> {
         match string {
@@ -86,17 +173,17 @@ impl PrimitiveType {
     }
 }
 
-impl StandardKeyword {
-    fn from_str(string: &str) -> Option<StandardKeyword> {
+impl RawStandardKeyword {
+    fn from_str(string: &str) -> Option<RawStandardKeyword> {
         match string {
-            "fndef" => Some(StandardKeyword::Fndef),
-            "stdin" => Some(StandardKeyword::Stdin),
-            "stdout" => Some(StandardKeyword::Stdout),
-            "+" => Some(StandardKeyword::Add),
-            "*" => Some(StandardKeyword::Mul),
-            "-" => Some(StandardKeyword::Sub),
-            "/" => Some(StandardKeyword::Div),
-            "#" => Some(StandardKeyword::Copy),
+            "fndef" => Some(RawStandardKeyword::Fndef),
+            "stdin" => Some(RawStandardKeyword::Stdin),
+            "stdout" => Some(RawStandardKeyword::Stdout),
+            "+" => Some(RawStandardKeyword::Add),
+            "*" => Some(RawStandardKeyword::Mul),
+            "-" => Some(RawStandardKeyword::Sub),
+            "/" => Some(RawStandardKeyword::Div),
+            "#" => Some(RawStandardKeyword::Copy),
             _ => None
         }
     }

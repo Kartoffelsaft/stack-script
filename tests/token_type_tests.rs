@@ -58,7 +58,7 @@ fn type_cast() {
 fn keyword() {
     assert_eq!(
         RawToken::from_str("stdout"),
-        RawToken::Keyword(StandardKeyword::Stdout)
+        RawToken::Keyword(RawStandardKeyword::Stdout)
     )
 }
 

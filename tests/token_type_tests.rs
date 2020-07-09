@@ -3,7 +3,7 @@ use rand::prelude::*;
 use either::Either;
 
 #[test]
-fn test_numbers() {
+fn ints() {
     let mut rng = rand::thread_rng();
     for _ in 0..100 {
         let rand_num = rng.gen::<i32>();
@@ -11,6 +11,21 @@ fn test_numbers() {
             RawToken::from_str(format!("{}", rand_num).as_str()),
             RawToken::Number(Either::Left(rand_num as isize))
         )
+    }
+}
+
+#[test]
+fn floats() {
+    let mut rng = rand::thread_rng();
+    for _ in 0..100 {
+        let rand_num = rng.gen::<f32>() * 100f32 - 50f32;
+        if let RawToken::Number(Either::Right(parsed_value))
+        = RawToken::from_str(format!("{}", rand_num).as_str()) {
+            assert!(
+                (rand_num as f64 - parsed_value).abs() < 0.00001,
+                "parsed value out of bounds of expected"
+            )
+        } else { panic!("float was not parsed to be one"); }
     }
 }
 

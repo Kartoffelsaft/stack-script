@@ -109,5 +109,37 @@ fn function_definition() {
 
 #[test]
 fn recursive_function_definition() {
-    unimplemented!()
+    let raw = {
+        use RawToken::*;
+        vec![
+            UserDefinedToken("outer"),
+            StartBlock,
+            UserDefinedToken("inner"),
+            StartBlock,
+            EndBlock,
+            Keyword(RawStandardKeyword::Fndef),
+            EndBlock,
+            Keyword(RawStandardKeyword::Fndef),
+        ]
+    };
+
+    let refined = Block {
+        user_defs: hashmap!{
+            "outer" => Block {
+                user_defs: hashmap!{
+                    "inner" => Block {
+                        user_defs: hashmap!{},
+                        operations: vec![],
+                    }
+                },
+                operations: vec![],
+            }
+        },
+        operations: vec![],
+    };
+
+    assert_eq!(
+        Block::from_rawtoken_iter(&mut raw.into_iter()),
+        refined
+    )
 }

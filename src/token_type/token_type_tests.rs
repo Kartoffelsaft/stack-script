@@ -1,6 +1,7 @@
-use stack_script::token_type::*;
+use super::*;
 use rand::prelude::*;
 use either::Either;
+use maplit::hashmap;
 
 #[test]
 fn ints() {
@@ -72,4 +73,41 @@ fn from_vec_str() {
             RawToken::EndBlock
         ]
     )
+}
+
+#[test]
+fn function_definition() {
+    let raw = {
+        use RawToken::*;
+        vec![
+            UserDefinedToken("test"),
+            StartBlock,
+            Keyword(RawStandardKeyword::Copy),
+            EndBlock,
+            Keyword(RawStandardKeyword::Fndef),
+        ]
+    };
+
+    let refined = {
+        use RefinedToken::*;
+        Block {
+            user_defs: hashmap!{
+                "test" => Block {
+                    user_defs: HashMap::new(),
+                    operations: vec![Keyword(RefinedStandardKeyword::Copy)],
+                }
+            },
+            operations: vec![],
+        }
+    };
+
+    assert_eq!(
+        Block::from_rawtoken_iter(&mut raw.into_iter()),
+        refined
+    )
+}
+
+#[test]
+fn recursive_function_definition() {
+    unimplemented!()
 }

@@ -3,10 +3,13 @@ use regex::Regex;
 use lazy_static::lazy_static;
 use std::collections::HashMap;
 
+#[cfg(test)]
+mod token_type_tests;
+
 #[derive(Debug, PartialEq)]
 pub struct Block<'a> {
     user_defs: HashMap<&'a str, Block<'a>>,
-    operations: Vec<RefinedToken<'a>>
+    operations: Vec<RefinedToken<'a>>,
 }
 
 #[derive(Debug, PartialEq)]
@@ -80,7 +83,7 @@ impl Block<'_> {
                     match new_user_defs.insert(
                         new_fn_name,
                         block_stack.pop().expect("Function defined without body"),
-                    ) { None => (), Some(_) => eprintln!("WARN: Function defined twice. Overwriting."),}
+                    ) { None => (), Some(_) => eprintln!("WARN: Function \"{}\" defined twice. Overwriting.", new_fn_name),}
                     new_operations.remove(definition_index);
                 },
                 r => new_operations.push(
@@ -118,8 +121,7 @@ impl RefinedStandardKeyword {
 }
 
 impl RawToken<'_> {
-    #[allow(clippy::should_implement_trait)]
-    pub fn from_str(string: &str) -> RawToken {
+    fn from_str(string: &str) -> RawToken {
         lazy_static! {
             static ref LANG_TYPE_RE: Regex = Regex::new(r"^\[(.*)\]$").unwrap();
             static ref LANG_TYPE_CAST_RE: Regex = Regex::new(r"^\((.*)\)$").unwrap();

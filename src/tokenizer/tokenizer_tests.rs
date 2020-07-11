@@ -1,4 +1,4 @@
-use stack_script::tokenizer::*;
+use super::*;
 
 #[test]
 fn hello_world() {

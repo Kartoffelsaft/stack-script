@@ -143,3 +143,37 @@ fn recursive_function_definition() {
         refined
     )
 }
+
+#[test]
+fn loose_block() {
+    let raw = {
+        use RawToken::*;
+        vec![
+            Keyword(RawStandardKeyword::Stdin),
+            StartBlock,
+            Keyword(RawStandardKeyword::Stdout),
+            EndBlock,
+        ]
+    };
+
+    let refined = {
+        use RefinedToken::*;
+        Block {
+            user_defs: hashmap! {},
+            operations: vec![
+                Keyword(RefinedStandardKeyword::Stdin),
+                LooseBlock(Block {
+                    user_defs: hashmap! {},
+                    operations: vec![
+                        Keyword(RefinedStandardKeyword::Stdout),
+                    ],
+                }),
+            ],
+        }
+    };
+
+    assert_eq!(
+        Block::from_rawtoken_iter(&mut raw.into_iter()),
+        refined
+    )
+}

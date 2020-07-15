@@ -6,22 +6,23 @@ use std::collections::HashMap;
 #[cfg(test)]
 mod token_type_tests;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct Block<'a> {
     user_defs: HashMap<&'a str, Block<'a>>,
     operations: Vec<RefinedToken<'a>>,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 enum RefinedToken<'a> {
     LangType(PrimitiveType),
     LangTypeCast(PrimitiveType),
     Number(Either<isize, f64>),
     Keyword(RefinedStandardKeyword),
     Call(&'a str),
+    LooseBlock(Block<'a>),
 }
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, PartialEq, Copy, Clone)]
 enum RefinedStandardKeyword {
     Stdin,
     Stdout,
@@ -43,7 +44,7 @@ pub enum RawToken<'a> {
     UserDefinedToken(&'a str),
 }
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, PartialEq, Copy, Clone)]
 pub enum PrimitiveType {
     Float32,
     Int32,
@@ -67,24 +68,38 @@ impl Block<'_> {
         let mut new_operations = Vec::new();
 
         let mut token_stack = Vec::<(&str, usize)>::new();
-        let mut block_stack = Vec::<Block>::new();
+        let mut block_stack = Vec::<(Block, usize)>::new();
 
         use RawToken::*;
         while let Some(next) = iter.next() { match next {
-            StartBlock => block_stack.push(Block::from_rawtoken_iter(iter)),
+            StartBlock => {
+                let new_block = Block::from_rawtoken_iter(iter);
+                block_stack.push((new_block.clone(), new_operations.len()));
+                new_operations.push(RefinedToken::LooseBlock(new_block));
+            },
             EndBlock => break,
             LangType(t) => new_operations.push(RefinedToken::LangType(t)),
             LangTypeCast(t) => new_operations.push(RefinedToken::LangTypeCast(t)),
             Number(n) => new_operations.push(RefinedToken::Number(n)),
             Keyword(w) => match w {
                 RawStandardKeyword::Fndef => {
-                    let (new_fn_name, definition_index) =
+                    let (new_fn_name, fn_name_index) =
                         token_stack.pop().expect("Function defined without name");
+                    let (new_block, block_index) =
+                        block_stack.pop().expect("Function defined without body");
+
+                    if block_index > fn_name_index {
+                        new_operations.remove(block_index);
+                        new_operations.remove(fn_name_index);
+                    } else {
+                        new_operations.remove(fn_name_index);
+                        new_operations.remove(block_index);
+                    }
+
                     match new_user_defs.insert(
                         new_fn_name,
-                        block_stack.pop().expect("Function defined without body"),
+                        new_block,
                     ) { None => (), Some(_) => eprintln!("WARN: Function \"{}\" defined twice. Overwriting.", new_fn_name),}
-                    new_operations.remove(definition_index);
                 },
                 r => new_operations.push(
                     RefinedToken::Keyword(

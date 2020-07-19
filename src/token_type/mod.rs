@@ -3,6 +3,8 @@ use regex::Regex;
 use lazy_static::lazy_static;
 use std::collections::HashMap;
 
+mod executable_def;
+
 #[cfg(test)]
 mod token_type_tests;
 

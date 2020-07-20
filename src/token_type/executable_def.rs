@@ -3,7 +3,7 @@ use either::Either::{Left, Right};
 
 impl Executable for super::Block<'_> {
     fn execute(&self) -> Result<(), ExecuteErr> {
-        let _ = self.execute_with_stack(&mut Vec::new());
+        self.execute_with_stack(&mut Vec::new()).expect("Runtime error");
         Ok(())
     }
 
